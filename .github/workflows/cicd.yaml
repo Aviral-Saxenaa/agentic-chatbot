@@ -30,13 +30,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Lint code
-        run: |
-          echo "Linting repository"
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
 
-      - name: Run unit tests
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Validate Python source
         run: |
-          echo "Running unit tests"
+          python -m py_compile backend.py app.py
+          GROQ_API_KEY=ci-validation-key python -c "import backend; print('Backend import passed')"
 
 
   # ============================================================

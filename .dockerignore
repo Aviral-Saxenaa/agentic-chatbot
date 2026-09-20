@@ -5,3 +5,11 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Secrets and local runtime state
+.env
+.git/
+.gitignore
+chatbot.db*
+faiss_db/
+__pycache__/
