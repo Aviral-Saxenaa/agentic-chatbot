@@ -1,19 +1,19 @@
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict, Annotated
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph.message import add_messages
 import sqlite3
 from langgraph.prebuilt import ToolNode, tools_condition
-from langchain_tavily import TavilySearch
+from ddgs import DDGS
 from langchain_core.tools import tool
 import math
 import requests
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 import os 
 from typing import Any
@@ -23,15 +23,33 @@ from langgraph.types import interrupt, Command
 load_dotenv()
 
 
-# LLM 
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    temperature=0.7
+# LLM
+groq_api_key = os.getenv("GROQ_API_KEY")
+if not groq_api_key:
+    raise RuntimeError(
+        "GROQ_API_KEY is missing. Add it to .env before starting Streamlit."
+    )
+
+llm = ChatGroq(
+    model="openai/gpt-oss-120b",
+    temperature=0.7,
+    api_key=groq_api_key,
 )
 
 
-# Embeddings model
-embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
+# Download the embedding model only when a PDF is first uploaded.
+embeddings = None
+
+
+def get_embeddings():
+    global embeddings
+
+    if embeddings is None:
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
+
+    return embeddings
 
 
 
@@ -41,7 +59,7 @@ def ingest_rag_document(file_path):
     docs = loader.load()
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = splitter.split_documents(docs)
-    vector_store = FAISS.from_documents(chunks, embeddings)
+    vector_store = FAISS.from_documents(chunks, get_embeddings())
     vector_store.save_local(DB_PATH)
     
 
@@ -50,7 +68,7 @@ def get_retriever():
     DB_PATH = "faiss_db"
     vector_store = FAISS.load_local(
             folder_path=DB_PATH,
-            embeddings=embeddings,
+            embeddings=get_embeddings(),
             allow_dangerous_deserialization=True
         )
     
@@ -103,11 +121,22 @@ def rag_tool(query: str) -> str:
 
 # Tools
 
-search_tool = TavilySearch(
-    max_results=5,
-    topic="general",
-    search_depth="advanced"
-)
+@tool
+def search_tool(query: str) -> str:
+    """Search the web with DuckDuckGo for current or recent information."""
+    try:
+        results = DDGS().text(query, max_results=5)
+        if not results:
+            return "No search results were found."
+
+        return "\n\n".join(
+            f"{result.get('title', 'Untitled')}\n"
+            f"{result.get('body', '')}\n"
+            f"Source: {result.get('href', 'Unknown')}"
+            for result in results
+        )
+    except Exception as error:
+        return f"Web search failed: {error}"
 
 
 @tool
@@ -143,9 +172,26 @@ def get_stock_price(symbol: str) -> dict:
     Fetch latest stock price for a given symbol (e.g. 'AAPL', 'TSLA') 
     using Alpha Vantage with API key in the URL.
     """
-    url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey=9MZO2JUBR7IFNTOI"
-    r = requests.get(url)
-    return r.json()
+    api_key = os.getenv("ALPHAVANTAGE_API_KEY")
+    if not api_key:
+        return {
+            "error": (
+                "Stock price lookup is unavailable. Set "
+                "ALPHAVANTAGE_API_KEY in .env."
+            )
+        }
+
+    response = requests.get(
+        "https://www.alphavantage.co/query",
+        params={
+            "function": "GLOBAL_QUOTE",
+            "symbol": symbol,
+            "apikey": api_key,
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
+    return response.json()
 
 
 

@@ -3,6 +3,14 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Local application state and secrets
+.env
+.venv/
+venv/
+chatbot.db
+chatbot.db-*
+faiss_db/
+
 # C extensions
 *.so
 

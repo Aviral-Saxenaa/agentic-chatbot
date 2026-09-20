@@ -2,6 +2,20 @@
 
 ### Description: About the deployment
 
+## Run locally
+
+Use Python 3.11 for this project. From the project directory:
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+streamlit run app.py
+```
+
+The required key is `GROQ_API_KEY`. `ALPHAVANTAGE_API_KEY` enables stock prices and
+`OPENWEATHER_API_KEY` enables weather. Web search uses DuckDuckGo and needs no API key.
+
 	1. Build docker image of the source code
 
 	2. Push your docker image to docker hub
@@ -72,13 +86,11 @@ AWS_SECRET_ACCESS_KEY=your-aws-secret-key
 
 AWS_REGION=us-east-1
 
-OPENAI_API_KEY=your-openai-api-key
+GROQ_API_KEY=your-groq-api-key
 
-TAVILY_API_KEY=your-tavily-api-key
+ALPHAVANTAGE_API_KEY=your-alphavantage-api-key
 
 OPENWEATHER_API_KEY=your-openweather-api-key
-
-GOOGLE_API_KEY=your-google-api-key
 
 LANGSMITH_TRACING=true
 
